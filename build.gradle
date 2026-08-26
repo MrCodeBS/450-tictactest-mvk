@@ -1,5 +1,11 @@
 plugins {
 	id 'java'
+	id 'application'
+
+}
+
+application {
+    mainClass = 'ch.bbw.m450.tictactoe.TicTacToeMain'
 }
 
 repositories {
