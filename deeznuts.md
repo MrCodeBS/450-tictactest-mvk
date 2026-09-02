@@ -17,3 +17,11 @@
 
 ## Verifiziert
 - `./gradlew test --console=plain` wurde ausgeführt und die Test-Suite erfolgreich geprüft.
+- Alle 7 Tests bestanden: 2 Dummy-Tests + 5 TicTac-Toe-Tests ✅
+
+## Test-Fehlschlag Demonstration
+- Test `isWin_detects_horizontal_win()` wurde intentional auf `.isFalse()` statt `.isTrue()` gesetzt.
+- Gradle meldet: `AssertionFailedError at TicTacToeMainTest.java:21`
+- Fehlerhafte Tests werden in der Build-Ausgabe klar angezeigt.
+- Nach Korrektur: alle Tests grün ✅
+![alt text](image.png)
