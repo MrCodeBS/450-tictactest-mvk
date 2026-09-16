@@ -84,3 +84,6 @@ Das Projekt gilt als getestet, wenn:
 
 Performance-, Last- und Sicherheitstests sind für dieses kleine Konsolenspiel
 nicht notwendig.
+
+
+# feedback von Mariia ist gut es fählt give when und rolen und owner sind nicht s
