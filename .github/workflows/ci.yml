@@ -8,11 +8,17 @@ jobs:
     build:
         runs-on: ubuntu-latest
         
-        # Wichtig: Die Action braucht Schreibrechte, um auf gh-pages zu pushen
-        # und PR-Kommentare zu erstellen
+        # Erforderliche Rechte für PR-Kommentare und das native GitHub Pages Deployment
         permissions:
             contents: write
             pull-requests: write
+            pages: write      
+            id-token: write   
+
+        # Notwendig für das native GitHub Pages Deployment
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
 
         steps:
             - name: Checkout
@@ -41,17 +47,27 @@ jobs:
                   min-coverage-changed-files: 60
                   title: 📊 JaCoCo Code Coverage
 
-            # 2. HTML-Report als herunterladbares Artefakt speichern (immer)
+            # 2. HTML-Report als normales Artefakt speichern (immer)
             - name: Upload JaCoCo HTML Report Artifact
               uses: actions/upload-artifact@v4
               with:
                   name: jacoco-html-report
                   path: build/reports/jacoco/test/html/
 
-            # 3. HTML-Report auf GitHub Pages veröffentlichen (nur auf main/master Branches)
-            - name: Deploy to GitHub Pages
-              if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/refactor/tictactoe-parameterized-tests')
-              uses: peaceiris/actions-gh-pages@v3
+            # 3. Vorbereitung für GitHub Pages (Nativ)
+            - name: Setup GitHub Pages
+              uses: actions/configure-pages@v4
+              if: github.event_name == 'push'
+
+            # 4. Artefakt für GitHub Pages hochladen (Jeder Branch Push)
+            - name: Upload Pages Artifact
+              uses: actions/upload-pages-artifact@v3
+              if: github.event_name == 'push'
               with:
-                  github_token: ${{ secrets.GITHUB_TOKEN }}
-                  publish_dir: ./build/reports/jacoco/test/html
+                  path: build/reports/jacoco/test/html/
+
+            # 5. Auf GitHub Pages deployen (Jeder Branch Push)
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
+              if: github.event_name == 'push'
