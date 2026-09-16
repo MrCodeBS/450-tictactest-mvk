@@ -8,14 +8,12 @@ jobs:
     build:
         runs-on: ubuntu-latest
         
-        # Erforderliche Rechte für PR-Kommentare und das native GitHub Pages Deployment
         permissions:
             contents: write
             pull-requests: write
             pages: write      
             id-token: write   
 
-        # Notwendig für das native GitHub Pages Deployment
         environment:
             name: github-pages
             url: ${{ steps.deployment.outputs.page_url }}
@@ -23,6 +21,9 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
+              with:
+                  # Needed for stefanzweifel/git-auto-commit-action to work correctly
+                  ref: ${{ github.head_ref }}
 
             - name: Set up Java
               uses: actions/setup-java@v4
@@ -47,26 +48,45 @@ jobs:
                   min-coverage-changed-files: 60
                   title: 📊 JaCoCo Code Coverage
 
-            # 2. HTML-Report als normales Artefakt speichern (immer)
+            # 2. Python Setup für das Coverage Diagramm
+            - name: Setup Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: '3.10'
+
+            # 3. CSV lesen, updaten und Diagramm generieren
+            - name: Generate Coverage Chart & History
+              run: |
+                  pip install matplotlib
+                  python .github/scripts/update_coverage.py
+                  echo "### JaCoCo Coverage History" >> $GITHUB_STEP_SUMMARY
+                  echo "![Coverage Chart](https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/.github/coverage-chart.png)" >> $GITHUB_STEP_SUMMARY
+
+            # 4. CSV und Bild ins Repo pushen (persistent speichern)
+            - name: Commit Coverage History
+              uses: stefanzweifel/git-auto-commit-action@v5
+              with:
+                  commit_message: "chore: update coverage history and chart"
+                  file_pattern: '.github/coverage-history.csv .github/coverage-chart.png'
+
+            # 5. HTML-Report als normales Artefakt speichern
             - name: Upload JaCoCo HTML Report Artifact
               uses: actions/upload-artifact@v4
               with:
                   name: jacoco-html-report
                   path: build/reports/jacoco/test/html/
 
-            # 3. Vorbereitung für GitHub Pages (Nativ)
+            # 6. GitHub Pages Deployment
             - name: Setup GitHub Pages
               uses: actions/configure-pages@v4
               if: github.event_name == 'push'
 
-            # 4. Artefakt für GitHub Pages hochladen (Jeder Branch Push)
             - name: Upload Pages Artifact
               uses: actions/upload-pages-artifact@v3
               if: github.event_name == 'push'
               with:
                   path: build/reports/jacoco/test/html/
 
-            # 5. Auf GitHub Pages deployen (Jeder Branch Push)
             - name: Deploy to GitHub Pages
               id: deployment
               uses: actions/deploy-pages@v4
