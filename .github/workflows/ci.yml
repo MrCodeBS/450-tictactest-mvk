@@ -69,11 +69,12 @@ jobs:
                   commit_message: "chore: update coverage history and chart"
                   file_pattern: '.github/coverage-history.csv .github/coverage-chart.png'
 
-            # CSV und Diagramm in den HTML-Ordner kopieren, damit sie auf Pages landen
+            # CSV und Diagramm in den HTML-Ordner kopieren und in die Startseite einbinden
             - name: Prepare Pages Content
               run: |
                   cp .github/coverage-history.csv build/reports/jacoco/test/html/ || true
                   cp .github/coverage-chart.png build/reports/jacoco/test/html/ || true
+                  sed -i 's|<body>|<body><h2>Coverage History</h2><img src="coverage-chart.png" alt="Coverage History" style="max-width:800px; margin-bottom: 20px;"><hr>|g' build/reports/jacoco/test/html/index.html
 
             # 5. HTML-Report als normales Artefakt speichern
             - name: Upload JaCoCo HTML Report Artifact
