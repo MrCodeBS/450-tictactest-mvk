@@ -74,7 +74,7 @@ jobs:
               run: |
                   cp .github/coverage-history.csv build/reports/jacoco/test/html/ || true
                   cp .github/coverage-chart.png build/reports/jacoco/test/html/ || true
-                  sed -i 's|<body>|<body><h2>Coverage History</h2><img src="coverage-chart.png" alt="Coverage History" style="max-width:800px; margin-bottom: 20px;"><hr>|g' build/reports/jacoco/test/html/index.html
+                  sed -i 's|</div><h1>|</div><h2>Coverage History</h2><img src="coverage-chart.png" alt="Coverage History" style="max-width:800px; margin-bottom: 20px;"><hr><h1>|g' build/reports/jacoco/test/html/index.html
 
             # 5. HTML-Report als normales Artefakt speichern
             - name: Upload JaCoCo HTML Report Artifact
