@@ -1,8 +1,10 @@
 plugins {
 	id 'java'
 	id 'application'
-
+	id 'jacoco'
 }
+
+
 
 application {
     mainClass = 'ch.bbw.m450.tictactoe.TicTacToeMain'
@@ -21,4 +23,13 @@ dependencies {
 
 test {
 	useJUnitPlatform()
+	finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
 }
