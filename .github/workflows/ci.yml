@@ -7,13 +7,19 @@ on:
 jobs:
     build:
         runs-on: ubuntu-latest
+        
+        # Wichtig: Die Action braucht Schreibrechte, um auf gh-pages zu pushen
+        # und PR-Kommentare zu erstellen
+        permissions:
+            contents: write
+            pull-requests: write
 
         steps:
             - name: Checkout
-              uses: actions/checkout@v6
+              uses: actions/checkout@v4
 
             - name: Set up Java
-              uses: actions/setup-java@v5
+              uses: actions/setup-java@v4
               with:
                   distribution: temurin
                   java-version: "21"
@@ -21,5 +27,31 @@ jobs:
             - name: Make Gradle Wrapper executable
               run: chmod +x gradlew
 
-            - name: Build and test
+            - name: Build and test (includes JaCoCo)
               run: ./gradlew build --no-daemon
+
+            # 1. Report als Kommentar in Pull Requests (nur bei PRs)
+            - name: Add Coverage to PR
+              uses: madrapps/jacoco-report@v1.6.1
+              if: github.event_name == 'pull_request'
+              with:
+                  paths: ${{ github.workspace }}/build/reports/jacoco/test/jacocoTestReport.xml
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  min-coverage-overall: 40
+                  min-coverage-changed-files: 60
+                  title: 📊 JaCoCo Code Coverage
+
+            # 2. HTML-Report als herunterladbares Artefakt speichern (immer)
+            - name: Upload JaCoCo HTML Report Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: jacoco-html-report
+                  path: build/reports/jacoco/test/html/
+
+            # 3. HTML-Report auf GitHub Pages veröffentlichen (nur auf main/master Branches)
+            - name: Deploy to GitHub Pages
+              if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/refactor/tictactoe-parameterized-tests')
+              uses: peaceiris/actions-gh-pages@v3
+              with:
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+                  publish_dir: ./build/reports/jacoco/test/html
