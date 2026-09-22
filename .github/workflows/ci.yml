@@ -6,19 +6,9 @@ on:
     workflow_dispatch:
 
 jobs:
-    build:
+    test:
+        name: Build & Test
         runs-on: ubuntu-latest
-        
-        permissions:
-            contents: write
-            pull-requests: write
-            pages: write      
-            id-token: write   
-
-        environment:
-            name: github-pages
-            url: ${{ steps.deployment.outputs.page_url }}
-
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -38,18 +28,47 @@ jobs:
             - name: Build and test (includes JaCoCo)
               run: ./gradlew build --no-daemon
 
+            - name: Upload JaCoCo Reports Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: jacoco-reports
+                  path: build/reports/jacoco/test/
+                  retention-days: 1
+
+    coverage:
+        name: Coverage Analysis & Gate
+        needs: test
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.head_ref }}
+                  fetch-depth: 0
+
+            - name: Download JaCoCo Reports
+              uses: actions/download-artifact@v4
+              with:
+                  name: jacoco-reports
+                  path: build/reports/jacoco/test/
+
             - name: Setup Python
               uses: actions/setup-python@v5
               with:
                   python-version: '3.10'
+            
+            - name: Install dependencies
+              run: pip install matplotlib
 
-            # Auftrag 3: Coverage Gate fǬr Pull Requests (Vergleich mit main)
+            # PR: Coverage Gate
             - name: Run Coverage Gate
               id: gate
               if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
               run: python .github/scripts/coverage_gate.py
 
-            # Bonus Auftrag 3: Resultat direkt als Kommentar im Pull Request
             - name: Comment Coverage Gate on PR
               uses: marocchino/sticky-pull-request-comment@v2
               if: github.event_name == 'pull_request' && (success() || failure())
@@ -60,16 +79,14 @@ jobs:
                     ${{ steps.gate.outputs.gate_output }}
                     ```
 
-            # 3. CSV lesen, updaten und Diagramm generieren (Nur auf Pushes, nicht auf PRs um History sauber zu halten)
+            # Push: Time Series Chart & Commit
             - name: Generate Coverage Chart & History
               if: github.event_name == 'push'
               run: |
-                  pip install matplotlib
                   python .github/scripts/update_coverage.py
                   echo "### JaCoCo Coverage History" >> $GITHUB_STEP_SUMMARY
                   echo "![Coverage Chart](https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/.github/coverage-chart.png)" >> $GITHUB_STEP_SUMMARY
 
-            # 4. CSV und Bild ins Repo pushen (persistent speichern, nur auf Pushes)
             - name: Commit Coverage History
               if: github.event_name == 'push'
               uses: stefanzweifel/git-auto-commit-action@v5
@@ -77,7 +94,7 @@ jobs:
                   commit_message: "chore: update coverage history and chart"
                   file_pattern: '.github/coverage-history.csv .github/coverage-chart.png'
 
-            # CSV und Diagramm in den HTML-Ordner kopieren und in die Startseite einbinden
+            # Prepare HTML Report
             - name: Prepare Pages Content
               if: github.event_name == 'push'
               run: |
@@ -85,14 +102,13 @@ jobs:
                   cp .github/coverage-chart.png build/reports/jacoco/test/html/ || true
                   sed -i 's|</div><h1>|</div><h2>Coverage History</h2><img src="coverage-chart.png" alt="Coverage History" style="max-width:800px; margin-bottom: 20px;"><hr><h1>|g' build/reports/jacoco/test/html/index.html
 
-            # 5. HTML-Report als normales Artefakt speichern
             - name: Upload JaCoCo HTML Report Artifact
               uses: actions/upload-artifact@v4
               with:
                   name: jacoco-html-report
                   path: build/reports/jacoco/test/html/
 
-            # 6. GitHub Pages Deployment
+            # Setup & Upload Pages Artifact
             - name: Setup GitHub Pages
               uses: actions/configure-pages@v4
               if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -103,7 +119,18 @@ jobs:
               with:
                   path: build/reports/jacoco/test/html/
 
+    deploy:
+        name: Deploy to GitHub Pages
+        needs: coverage
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        permissions:
+            pages: write      
+            id-token: write   
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
             - name: Deploy to GitHub Pages
               id: deployment
               uses: actions/deploy-pages@v4
-              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
