@@ -7,13 +7,26 @@ on:
 jobs:
     build:
         runs-on: ubuntu-latest
+        
+        permissions:
+            contents: write
+            pull-requests: write
+            pages: write      
+            id-token: write   
+
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
 
         steps:
             - name: Checkout
-              uses: actions/checkout@v6
+              uses: actions/checkout@v4
+              with:
+                  # Needed for stefanzweifel/git-auto-commit-action to work correctly
+                  ref: ${{ github.head_ref }}
 
             - name: Set up Java
-              uses: actions/setup-java@v5
+              uses: actions/setup-java@v4
               with:
                   distribution: temurin
                   java-version: "21"
@@ -21,5 +34,67 @@ jobs:
             - name: Make Gradle Wrapper executable
               run: chmod +x gradlew
 
-            - name: Build and test
+            - name: Build and test (includes JaCoCo)
               run: ./gradlew build --no-daemon
+
+            # 1. Report als Kommentar in Pull Requests (nur bei PRs)
+            - name: Add Coverage to PR
+              uses: madrapps/jacoco-report@v1.6.1
+              if: github.event_name == 'pull_request'
+              with:
+                  paths: ${{ github.workspace }}/build/reports/jacoco/test/jacocoTestReport.xml
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  min-coverage-overall: 40
+                  min-coverage-changed-files: 60
+                  title: 📊 JaCoCo Code Coverage
+
+            # 2. Python Setup für das Coverage Diagramm
+            - name: Setup Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: '3.10'
+
+            # 3. CSV lesen, updaten und Diagramm generieren
+            - name: Generate Coverage Chart & History
+              run: |
+                  pip install matplotlib
+                  python .github/scripts/update_coverage.py
+                  echo "### JaCoCo Coverage History" >> $GITHUB_STEP_SUMMARY
+                  echo "![Coverage Chart](https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/.github/coverage-chart.png)" >> $GITHUB_STEP_SUMMARY
+
+            # 4. CSV und Bild ins Repo pushen (persistent speichern)
+            - name: Commit Coverage History
+              uses: stefanzweifel/git-auto-commit-action@v5
+              with:
+                  commit_message: "chore: update coverage history and chart"
+                  file_pattern: '.github/coverage-history.csv .github/coverage-chart.png'
+
+            # CSV und Diagramm in den HTML-Ordner kopieren und in die Startseite einbinden
+            - name: Prepare Pages Content
+              run: |
+                  cp .github/coverage-history.csv build/reports/jacoco/test/html/ || true
+                  cp .github/coverage-chart.png build/reports/jacoco/test/html/ || true
+                  sed -i 's|</div><h1>|</div><h2>Coverage History</h2><img src="coverage-chart.png" alt="Coverage History" style="max-width:800px; margin-bottom: 20px;"><hr><h1>|g' build/reports/jacoco/test/html/index.html
+
+            # 5. HTML-Report als normales Artefakt speichern
+            - name: Upload JaCoCo HTML Report Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: jacoco-html-report
+                  path: build/reports/jacoco/test/html/
+
+            # 6. GitHub Pages Deployment
+            - name: Setup GitHub Pages
+              uses: actions/configure-pages@v4
+              if: github.event_name == 'push'
+
+            - name: Upload Pages Artifact
+              uses: actions/upload-pages-artifact@v3
+              if: github.event_name == 'push'
+              with:
+                  path: build/reports/jacoco/test/html/
+
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
+              if: github.event_name == 'push'

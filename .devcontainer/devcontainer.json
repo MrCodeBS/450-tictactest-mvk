@@ -1,0 +1,20 @@
+{
+  "name": "TicTacTest DevContainer",
+  "image": "ghcr.io/mrcodebs/450-tictactest-mvk-devcontainer:v1.0.0",
+  "remoteUser": "devuser",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-gradle",
+        "vscjava.vscode-java-pack",
+        "redhat.java",
+        "vscjava.vscode-java-test",
+        "vscjava.vscode-java-debug"
+      ],
+      "settings": {
+        "java.jdt.ls.java.home": "/opt/java/openjdk"
+      }
+    }
+  },
+  "postCreateCommand": "gradle --version"
+}
