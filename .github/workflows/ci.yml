@@ -3,6 +3,7 @@ name: CI
 on:
     push:
     pull_request:
+    workflow_dispatch:
 
 jobs:
     build:
@@ -22,8 +23,8 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
               with:
-                  # Needed for stefanzweifel/git-auto-commit-action to work correctly
                   ref: ${{ github.head_ref }}
+                  fetch-depth: 0
 
             - name: Set up Java
               uses: actions/setup-java@v4
@@ -37,33 +38,40 @@ jobs:
             - name: Build and test (includes JaCoCo)
               run: ./gradlew build --no-daemon
 
-            # 1. Report als Kommentar in Pull Requests (nur bei PRs)
-            - name: Add Coverage to PR
-              uses: madrapps/jacoco-report@v1.6.1
-              if: github.event_name == 'pull_request'
-              with:
-                  paths: ${{ github.workspace }}/build/reports/jacoco/test/jacocoTestReport.xml
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  min-coverage-overall: 40
-                  min-coverage-changed-files: 60
-                  title: 📊 JaCoCo Code Coverage
-
-            # 2. Python Setup für das Coverage Diagramm
             - name: Setup Python
               uses: actions/setup-python@v5
               with:
                   python-version: '3.10'
 
-            # 3. CSV lesen, updaten und Diagramm generieren
+            # Auftrag 3: Coverage Gate fǬr Pull Requests (Vergleich mit main)
+            - name: Run Coverage Gate
+              id: gate
+              if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+              run: python .github/scripts/coverage_gate.py
+
+            # Bonus Auftrag 3: Resultat direkt als Kommentar im Pull Request
+            - name: Comment Coverage Gate on PR
+              uses: marocchino/sticky-pull-request-comment@v2
+              if: github.event_name == 'pull_request' && (success() || failure())
+              with:
+                  header: coverage-gate
+                  message: |
+                    ```text
+                    ${{ steps.gate.outputs.gate_output }}
+                    ```
+
+            # 3. CSV lesen, updaten und Diagramm generieren (Nur auf Pushes, nicht auf PRs um History sauber zu halten)
             - name: Generate Coverage Chart & History
+              if: github.event_name == 'push'
               run: |
                   pip install matplotlib
                   python .github/scripts/update_coverage.py
                   echo "### JaCoCo Coverage History" >> $GITHUB_STEP_SUMMARY
                   echo "![Coverage Chart](https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/.github/coverage-chart.png)" >> $GITHUB_STEP_SUMMARY
 
-            # 4. CSV und Bild ins Repo pushen (persistent speichern)
+            # 4. CSV und Bild ins Repo pushen (persistent speichern, nur auf Pushes)
             - name: Commit Coverage History
+              if: github.event_name == 'push'
               uses: stefanzweifel/git-auto-commit-action@v5
               with:
                   commit_message: "chore: update coverage history and chart"
@@ -71,6 +79,7 @@ jobs:
 
             # CSV und Diagramm in den HTML-Ordner kopieren und in die Startseite einbinden
             - name: Prepare Pages Content
+              if: github.event_name == 'push'
               run: |
                   cp .github/coverage-history.csv build/reports/jacoco/test/html/ || true
                   cp .github/coverage-chart.png build/reports/jacoco/test/html/ || true
@@ -86,15 +95,15 @@ jobs:
             # 6. GitHub Pages Deployment
             - name: Setup GitHub Pages
               uses: actions/configure-pages@v4
-              if: github.event_name == 'push'
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
             - name: Upload Pages Artifact
               uses: actions/upload-pages-artifact@v3
-              if: github.event_name == 'push'
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
               with:
                   path: build/reports/jacoco/test/html/
 
             - name: Deploy to GitHub Pages
               id: deployment
               uses: actions/deploy-pages@v4
-              if: github.event_name == 'push'
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
