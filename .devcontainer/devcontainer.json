@@ -1,6 +1,6 @@
 {
   "name": "TicTacTest DevContainer",
-  "image": "ghcr.io/mrcodebs/450-tictactest-mvk-devcontainer:v1.0.0",
+  "image": "ghcr.io/mrcodebs/450-tictactest-mvk-devcontainer:v0.1.2",
   "remoteUser": "devuser",
   "customizations": {
     "vscode": {
