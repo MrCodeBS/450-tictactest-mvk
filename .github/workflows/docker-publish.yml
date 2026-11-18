@@ -5,10 +5,14 @@ on:
     branches:
       - main
       - master
-      - refactor/tictactoe-parameterized-tests
     paths:
       - '.devcontainer/**'
   workflow_dispatch:
+    inputs:
+      custom_tag:
+        description: 'Optional manual tag (e.g. v1.0.1)'
+        required: false
+        default: ''
 
 jobs:
   version-and-build:
@@ -22,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Bump version and push tag
         id: tag_version
@@ -29,16 +35,25 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch
+          custom_tag: ${{ github.event.inputs.custom_tag }}
+          tag_prefix: v
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
+          password: ${{ secrets.GHCR_PAT != '' && secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
 
-      - name: Lowercase repo name
-        run: echo "REPO=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+      - name: Prepare Image Name
+        run: |
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          TAG="${{ steps.tag_version.outputs.new_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v1.0.1"
+          fi
+          echo "IMAGE_TAG=ghcr.io/${REPO}-devcontainer:${TAG}" >> $GITHUB_ENV
+          echo "LATEST_TAG=ghcr.io/${REPO}-devcontainer:latest" >> $GITHUB_ENV
 
       - name: Build and push versioned image
         uses: docker/build-push-action@v5
@@ -46,7 +61,7 @@ jobs:
           context: .
           file: .devcontainer/Dockerfile
           push: true
-          tags: ghcr.io/${{ env.REPO }}-devcontainer:${{ steps.tag_version.outputs.new_tag }}
+          tags: ${{ env.IMAGE_TAG }}
 
   release-gate:
     name: Approve Release (Gate)
@@ -62,15 +77,18 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
+          password: ${{ secrets.GHCR_PAT != '' && secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Tag as latest and push
         run: |
-          # Lowercase the repository name to match GHCR formatting
           REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker pull ghcr.io/$REPO-devcontainer:${{ needs.version-and-build.outputs.new_tag }}
-          docker tag ghcr.io/$REPO-devcontainer:${{ needs.version-and-build.outputs.new_tag }} ghcr.io/$REPO-devcontainer:latest
-          docker push ghcr.io/$REPO-devcontainer:latest
+          TAG="${{ needs.version-and-build.outputs.new_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v1.0.1"
+          fi
+          docker pull ghcr.io/${REPO}-devcontainer:${TAG}
+          docker tag ghcr.io/${REPO}-devcontainer:${TAG} ghcr.io/${REPO}-devcontainer:latest
+          docker push ghcr.io/${REPO}-devcontainer:latest
 
   auto-pr:
     name: Create Auto-PR for Version Bump
@@ -85,7 +103,11 @@ jobs:
 
       - name: Update version in devcontainer.json
         run: |
-          sed -i 's|ghcr.io/mrcodebs/450-tictactest-mvk-devcontainer:.*"|ghcr.io/mrcodebs/450-tictactest-mvk-devcontainer:${{ needs.version-and-build.outputs.new_tag }}"|' .devcontainer/devcontainer.json
+          TAG="${{ needs.version-and-build.outputs.new_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v1.0.1"
+          fi
+          sed -i -E 's|"image":\s*"[^"]*"|"image": "ghcr.io/'"$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')"'-devcontainer:'"$TAG"'"|' .devcontainer/devcontainer.json
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6

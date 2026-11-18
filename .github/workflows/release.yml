@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release Tag (e.g. v1.1.0)'
+        required: true
+        default: 'v1.1.0'
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version Tag
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${TAG#v}"
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Building Release for Tag: $TAG (Version: $VERSION)"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Make Gradle Wrapper executable
+        run: chmod +x gradlew
+
+      - name: Run Tests
+        run: ./gradlew test --no-daemon
+
+      - name: Build Executable JAR
+        run: ./gradlew jar -PprojVersion=${{ env.VERSION }} --no-daemon
+
+      - name: Generate SHA-256 Checksum
+        run: |
+          cd build/libs
+          sha256sum tictactest-${{ env.VERSION }}.jar > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: "Release ${{ env.TAG }}"
+          body: |
+            ## TicTacTest ${{ env.TAG }}
+
+            Die ausführbare JAR-Datei steht unten unter den Assets zum direkten Download bereit.
+
+            ### Starten der Anwendung:
+            ```bash
+            java -jar tictactest-${{ env.VERSION }}.jar
+            ```
+
+            Siehe [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) für alle Änderungen.
+          files: |
+            build/libs/tictactest-${{ env.VERSION }}.jar
+            build/libs/checksums.txt
+          draft: false
+          prerelease: false

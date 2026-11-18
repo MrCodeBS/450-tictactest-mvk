@@ -1,10 +1,25 @@
-plugins {
-	id 'java'
-	id 'application'
-	id 'jacoco'
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'info.solidsoft.gradle.pitest:gradle-pitest-plugin:1.15.0'
+    }
 }
 
+// Compatibility shim for Gradle 9 where ReportingExtension.getBaseDir() was removed
+org.gradle.api.reporting.ReportingExtension.metaClass.getBaseDir = {
+    delegate.baseDirectory.asFile.get()
+}
 
+apply plugin: 'java'
+apply plugin: 'application'
+apply plugin: 'jacoco'
+apply plugin: 'info.solidsoft.pitest'
+
+group = 'ch.bbw.m450'
+version = project.findProperty('projVersion') ?: '1.0.0'
 
 application {
     mainClass = 'ch.bbw.m450.tictactoe.TicTacToeMain'
@@ -19,10 +34,26 @@ dependencies {
 	testImplementation 'org.junit.jupiter:junit-jupiter'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testImplementation 'org.assertj:assertj-core:3.25.3'
+	testImplementation 'org.junit-pioneer:junit-pioneer:2.2.0'
+	testImplementation 'net.jqwik:jqwik:1.8.5'
+}
+
+jar {
+	manifest {
+		attributes(
+			'Main-Class': 'ch.bbw.m450.tictactoe.TicTacToeMain',
+			'Implementation-Title': 'TicTacTest',
+			'Implementation-Version': project.version
+		)
+	}
+	archiveBaseName = 'tictactest'
+	archiveVersion = project.version.toString()
 }
 
 test {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		includeEngines 'junit-jupiter', 'jqwik'
+	}
 	finalizedBy jacocoTestReport
 }
 
@@ -33,4 +64,26 @@ jacocoTestReport {
         html.required = true
         csv.required = true
     }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn test
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+        }
+    }
+}
+
+pitest {
+    targetClasses = ['ch.bbw.m450.tictactoe.*']
+    targetTests = ['ch.bbw.m450.tictactoe.*']
+    junit5PluginVersion = '1.2.1'
+    outputFormats = ['XML', 'HTML']
+    timestampedReports = false
 }
