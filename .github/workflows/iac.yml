@@ -1,0 +1,38 @@
+name: IaC OpenTofu Validation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'iac/**'
+      - '.github/workflows/iac.yml'
+  pull_request:
+    paths:
+      - 'iac/**'
+      - '.github/workflows/iac.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: OpenTofu Format & Validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: iac
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+
+      - name: Check formatting
+        run: tofu fmt -check
+
+      - name: Initialize OpenTofu (without backend)
+        run: tofu init -backend=false
+
+      - name: Validate configuration
+        run: tofu validate

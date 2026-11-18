@@ -1,7 +1,7 @@
 FROM eclipse-temurin:25-jdk-alpine
 
 # Install basic tools needed to fetch/unpack Gradle, plus bash (Alpine uses ash by default)
-RUN apk add --no-cache bash curl unzip git ca-certificates
+RUN apk add --no-cache bash curl unzip git ca-certificates opentofu aws-cli openssh-client
 
 # --- Install Gradle ---
 ARG GRADLE_VERSION=8.14
