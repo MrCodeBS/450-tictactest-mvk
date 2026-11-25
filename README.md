@@ -20,6 +20,7 @@ Tic-Tac-Toe als Konsolen-Applikation (Modul 450: Testing), als Web-App in der Cl
 |---|---|
 | Auftrag 1 – Web-Konsole, Frontend, Release-Assets | [docs/webkonsole.md](docs/webkonsole.md) |
 | Auftrag 2 + 3 – Infrastruktur, Deployment, Secrets, Reflexion, Promotion | [docs/deployment.md](docs/deployment.md) |
+| Setup in ein eigenes Repo übernehmen (Skript) | [docs/setup-webapp.md](docs/setup-webapp.md) |
 | IaC-Grundlagen (OpenTofu, EC2) | [IAC.md](IAC.md) |
 | Release-Prozess | [RELEASE.md](RELEASE.md), [CHANGELOG.md](CHANGELOG.md) |
 | Testkonzept (M450) | [testkonzept.md](testkonzept.md) |
