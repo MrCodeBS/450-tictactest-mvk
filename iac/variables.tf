@@ -39,13 +39,48 @@ variable "ami_id" {
 }
 
 variable "ssh_public_key" {
-  description = "Oeffentlicher SSH-Schluessel fuer den Zugriff auf die EC2-Instanz (lokal erzeugt, in terraform.tfvars oder per TF_VAR_ssh_public_key setzen)"
+  description = "Optionaler oeffentlicher SSH-Schluessel (leer = kein SSH, Zugriff nur ueber SSM)"
   type        = string
-  default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExamplePublicKeyReplaceInTfvars tictactest-key"
+  default     = ""
 }
 
 variable "allowed_ssh_cidr" {
   description = "CIDR-Block fuer eingehenden SSH-Zugriff auf Port 22 (in Produktion auf eigene IP/32 einschraenken)"
   type        = string
   default     = "0.0.0.0/0"
+}
+
+variable "instance_profile_name" {
+  description = "Vorhandenes Instance Profile (Learner Lab: LabInstanceProfile, eigene IAM-Rollen sind nicht erlaubt)"
+  type        = string
+  default     = "LabInstanceProfile"
+}
+
+variable "java_version" {
+  description = "Major-Version von Amazon Corretto (mindestens 25)"
+  type        = number
+  default     = 25
+
+  validation {
+    condition     = var.java_version >= 25
+    error_message = "Mindestens Java 25 (Amazon Corretto) ist gefordert."
+  }
+}
+
+variable "ttyd_version" {
+  description = "Feste ttyd-Version (Web-Konsole)"
+  type        = string
+  default     = "1.7.7"
+}
+
+variable "ttyd_sha256" {
+  description = "SHA-256 von ttyd.x86_64 der gewaehlten Version (aus SHA256SUMS des GitHub-Releases)"
+  type        = string
+  default     = "8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55"
+}
+
+variable "max_clients" {
+  description = "Max. gleichzeitige Partien (= JVMs) auf der Instanz"
+  type        = number
+  default     = 8
 }

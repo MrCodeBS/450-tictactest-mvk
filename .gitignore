@@ -43,3 +43,7 @@ terraform.rc
 *.ppk
 id_rsa*
 id_ed25519*
+
+# OpenTofu plan files
+tfplan
+*.tfplan

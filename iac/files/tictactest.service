@@ -1,0 +1,35 @@
+[Unit]
+Description=TicTacTest Web-Konsole (ttyd -> java -jar)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tictactest
+Group=tictactest
+# Infrastruktur-Werte (Bucket, Region) - von OpenTofu/cloud-init geschrieben
+EnvironmentFile=/etc/tictactest/infra.env
+# Applikations-Version - vom Deployment geschrieben (tictactest-deploy)
+EnvironmentFile=-/etc/tictactest/app.env
+# '+' = als root ausfuehren: holt ggf. das Jar aus S3 und schreibt version.txt
+ExecStartPre=+/usr/local/bin/tictactest-prepare
+# ttyd lauscht nur auf localhost, nginx (Port 80) ist der einzige Zugang von aussen.
+#   -W  : Eingaben aus dem Browser erlauben (sonst read-only)
+#   -O  : WebSocket nur von derselben Origin (Schutz vor Cross-Site-WebSocket-Hijacking)
+#   -m  : max. gleichzeitige Spiele (= JVMs) begrenzen -> RAM-Schutz auf t2.micro
+# Gestartet wird ausschliesslich das Spiel-Skript, niemals eine Shell.
+ExecStart=/opt/ttyd/ttyd -i lo -p 7681 -W -O -m ${MAX_CLIENTS} \
+  -t titleFixed=TicTacTest -t fontSize=18 -t disableLeaveAlert=true \
+  /usr/local/bin/tictactest-game
+Restart=always
+RestartSec=3
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/tictactest
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,51 @@
+#cloud-config
+# Einmalige Einrichtung der Laufzeitumgebung beim ersten Start.
+# Hier wird bewusst KEIN Jar heruntergeladen: welche Version laeuft, entscheidet das Deployment.
+
+write_files:
+  - path: /etc/tictactest/infra.env
+    permissions: "0644"
+    content: |
+      AWS_REGION=${aws_region}
+      ARTIFACTS_BUCKET=${artifacts_bucket}
+      MAX_CLIENTS=${max_clients}
+  - path: /etc/systemd/system/tictactest.service
+    permissions: "0644"
+    encoding: b64
+    content: ${service_unit}
+  - path: /etc/nginx/conf.d/tictactest.conf
+    permissions: "0644"
+    encoding: b64
+    content: ${nginx_conf}
+  - path: /usr/local/bin/tictactest-game
+    permissions: "0755"
+    encoding: b64
+    content: ${game_script}
+  - path: /usr/local/bin/tictactest-prepare
+    permissions: "0755"
+    encoding: b64
+    content: ${prepare_script}
+  - path: /usr/local/bin/tictactest-deploy
+    permissions: "0755"
+    encoding: b64
+    content: ${deploy_script}
+
+runcmd:
+  - set -eux
+  # Swap als Reserve fuer mehrere JVMs auf kleinen Instanzen
+  - fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  - echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+  # Java (Amazon Corretto ${java_version}) + nginx aus den signierten Amazon-Linux-Repos
+  - dnf install -y java-${java_version}-amazon-corretto-headless nginx
+  # ttyd ist nicht im Repo: feste Version + Pruefsumme
+  - mkdir -p /opt/ttyd
+  - curl -fsSL -o /opt/ttyd/ttyd https://github.com/tsl0922/ttyd/releases/download/${ttyd_version}/ttyd.x86_64
+  - echo "${ttyd_sha256}  /opt/ttyd/ttyd" | sha256sum -c -
+  - chmod 0755 /opt/ttyd/ttyd
+  # Unprivilegierter Dienst-User ohne Login-Shell
+  - useradd --system --no-create-home --shell /sbin/nologin tictactest
+  - mkdir -p /opt/tictactest/releases /var/www/tictactest
+  - echo "not-deployed" > /var/www/tictactest/version.txt
+  - systemctl daemon-reload
+  - systemctl enable --now nginx
+  - systemctl enable --now tictactest

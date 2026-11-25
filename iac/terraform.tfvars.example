@@ -1,8 +1,8 @@
 # Beispielkonfiguration - kopieren nach terraform.tfvars (niemals echte Secrets committen!)
-aws_region       = "us-east-1"
-environment      = "dev"
-instance_type    = "t2.micro"
-allowed_ssh_cidr = "0.0.0.0/0"
+aws_region    = "us-east-1"
+environment   = "dev"
+instance_type = "t2.micro"
 
-# Ersetzen mit dem Inhalt des lokal erzeugten Public Keys (z. B. ~/.ssh/tictactest_key.pub)
-ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExamplePublicKeyReplaceInTfvars tictactest-key"
+# Optional: SSH fuer Debugging. Leer lassen = kein Port 22, Zugriff nur ueber SSM.
+# ssh_public_key   = "ssh-ed25519 AAAA... tictactest-key"
+# allowed_ssh_cidr = "203.0.113.10/32"

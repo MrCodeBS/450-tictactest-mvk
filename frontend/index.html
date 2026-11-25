@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TicTacTest – im Browser spielen</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- config.js wird pro Umgebung bereitgestellt (lokal: Datei im Repo, Cloud: von OpenTofu geschrieben) -->
+  <script src="config.js"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>TicTacTest</h1>
+    <p class="subtitle">Tic-Tac-Toe gegen den Computer – direkt im Browser</p>
+  </header>
+
+  <main>
+    <section class="rules">
+      <h2>Spielregeln</h2>
+      <ol>
+        <li>Du spielst <strong>X</strong> und beginnst, der Computer spielt <strong>O</strong>.</li>
+        <li>Das Spielfeld ist nummeriert: freie Felder zeigen ihre Nummer <code>0</code>–<code>8</code>.</li>
+        <li>Klicke ins Terminal, tippe die Nummer eines freien Feldes und drücke <kbd>Enter</kbd>.</li>
+        <li>Wer zuerst drei in einer Reihe hat, gewinnt. Ungültige Eingaben werden abgelehnt.</li>
+        <li>Nach Spielende: Button <em>Neues Spiel</em> drücken (startet eine neue Partie).</li>
+      </ol>
+      <pre class="board">0 | 1 | 2
+--+---+--
+3 | 4 | 5
+--+---+--
+6 | 7 | 8</pre>
+      <button id="restart" type="button">Neues Spiel</button>
+    </section>
+
+    <section class="terminal">
+      <iframe id="console" title="TicTacTest Web-Konsole"></iframe>
+    </section>
+  </main>
+
+  <footer>
+    <span>Backend: <strong id="backend-version">…</strong></span>
+    <span>Frontend: <strong id="frontend-version">…</strong></span>
+  </footer>
+</body>
+</html>

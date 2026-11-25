@@ -1,0 +1,190 @@
+name: Deploy
+
+# Deployt die Artefakte eines bestehenden GitHub-Releases (es wird nichts neu gebaut,
+# und die Infrastruktur wird nicht angefasst - kein tofu apply).
+#  - automatisch aus release.yml (nur die geaenderten Teile)
+#  - manuell (workflow_dispatch): beliebige veroeffentlichte Version, z. B. fuer Rollback
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+      deploy_backend:
+        type: boolean
+        default: true
+      deploy_frontend:
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release-Tag, der deployt werden soll (z. B. v1.2.0)'
+        type: string
+        required: true
+      deploy_backend:
+        description: 'Backend (Jar) deployen'
+        type: boolean
+        default: true
+      deploy_frontend:
+        description: 'Frontend deployen'
+        type: boolean
+        default: true
+
+# Nie zwei Deployments gleichzeitig; ein laufendes wird nicht abgebrochen, das neue wartet.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  preflight:
+    name: Preflight (Version + AWS-Credentials)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - name: Validate tag
+        id: v
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Ungueltiger Tag '$TAG' (erwartet z. B. v1.2.0)"; exit 1
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null \
+            || { echo "::error::Release $TAG existiert nicht"; exit 1; }
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (Learner Lab)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Check credentials are still valid
+        run: |
+          if ! aws sts get-caller-identity --query Arn --output text >/dev/null; then
+            {
+              echo "### AWS-Credentials ungueltig oder abgelaufen"
+              echo "Learner Lab starten, neue Werte aus *AWS Details* in die GitHub Secrets"
+              echo "AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN eintragen und"
+              echo "danach **Deploy** per *Run workflow* mit Tag \`$TAG\` erneut starten."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::AWS-Credentials abgelaufen - siehe Job Summary"
+            exit 1
+          fi
+          echo "AWS-Credentials gueltig."
+
+  backend:
+    name: Deploy Backend
+    needs: preflight
+    if: inputs.deploy_backend
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.VERSION_URL }}
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      INSTANCE_ID: ${{ vars.INSTANCE_ID }}
+      ARTIFACTS_BUCKET: ${{ vars.ARTIFACTS_BUCKET }}
+      VERSION_URL: ${{ vars.VERSION_URL }}
+    steps:
+      - name: Download release jar (not rebuilt)
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            -p "tictactest-$VERSION.jar" -p checksums.txt
+          sha256sum --check --ignore-missing checksums.txt
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload jar to private artifacts bucket
+        run: |
+          aws s3 cp --only-show-errors "tictactest-$VERSION.jar" \
+            "s3://$ARTIFACTS_BUCKET/backend/$VERSION/tictactest-$VERSION.jar"
+
+      - name: Activate version on instance (SSM)
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "TicTacTest deploy $TAG" \
+            --parameters "commands=[\"/usr/local/bin/tictactest-deploy $VERSION\"]" \
+            --query Command.CommandId --output text)
+          echo "SSM command: $CMD_ID"
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query '[Status, StandardOutputContent, StandardErrorContent]' --output text
+          STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query Status --output text)
+          [ "$STATUS" = "Success" ] || { echo "::error::Deployment auf der Instanz fehlgeschlagen ($STATUS)"; exit 1; }
+
+      - name: Verify running version
+        run: |
+          for i in $(seq 1 24); do
+            RUNNING=$(curl -fsS --max-time 5 "$VERSION_URL" || true)
+            echo "Versuch $i: laeuft='$RUNNING' erwartet='$VERSION'"
+            [ "$RUNNING" = "$VERSION" ] && { echo "Backend $VERSION laeuft." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+            sleep 5
+          done
+          echo "::error::Backend meldet nach 2 Minuten nicht Version $VERSION"
+          exit 1
+
+  frontend:
+    name: Deploy Frontend
+    needs: preflight
+    if: inputs.deploy_frontend
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.FRONTEND_URL }}
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+      FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+    steps:
+      - name: Download release frontend archive (not rebuilt)
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            -p "tictactest-frontend-$VERSION.zip" -p checksums.txt
+          sha256sum --check --ignore-missing checksums.txt
+          mkdir site && unzip -q "tictactest-frontend-$VERSION.zip" -d site
+          # Lokale Default-Konfiguration nie hochladen - config.js gehoert der Infrastruktur
+          rm -f site/config.js
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+
+      - name: Sync to S3 (remove deleted files, keep config.js)
+        run: |
+          aws s3 sync site/ "s3://$FRONTEND_BUCKET/" --delete \
+            --exclude config.js --cache-control "no-cache" --only-show-errors
+          aws s3api head-object --bucket "$FRONTEND_BUCKET" --key config.js >/dev/null \
+            || { echo "::error::config.js fehlt im Bucket - tofu apply ausfuehren"; exit 1; }
+
+      - name: Verify served frontend version
+        run: |
+          for i in $(seq 1 12); do
+            SERVED=$(curl -fsS --max-time 5 "$FRONTEND_URL/version.txt" || true)
+            echo "Versuch $i: ausgeliefert='$SERVED' erwartet='$VERSION'"
+            [ "$SERVED" = "$VERSION" ] && { echo "Frontend $VERSION wird ausgeliefert." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+            sleep 5
+          done
+          echo "::error::Frontend liefert nicht Version $VERSION aus"
+          exit 1
