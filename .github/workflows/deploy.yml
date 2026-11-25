@@ -163,6 +163,10 @@ jobs:
           mkdir site && unzip -q "tictactest-frontend-$VERSION.zip" -d site
           # Lokale Default-Konfiguration nie hochladen - config.js gehoert der Infrastruktur
           rm -f site/config.js
+          # unzip behaelt die Zeitstempel aus dem Release-Build. "aws s3 sync" laedt nur hoch, wenn
+          # Groesse ODER (neuerer) Zeitstempel abweichen -> bei Rollback (aeltere Dateien, z. B. version.txt
+          # "1.2.0" vs "1.4.0" gleich gross) wuerde sonst nichts ersetzt. Daher alle Dateien "jetzt" stempeln.
+          find site -type f -exec touch {} +
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
