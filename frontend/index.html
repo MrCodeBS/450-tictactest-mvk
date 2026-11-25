@@ -10,37 +10,44 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <header>
-    <h1>TicTacTest</h1>
-    <p class="subtitle">Tic-Tac-Toe gegen den Computer – direkt im Browser</p>
-  </header>
+  <div class="page">
+    <header>
+      <p class="kicker">Modul 324 · Hausaufgabe</p>
+      <h1>Tic<span class="x">X</span>Tac<span class="o">O</span>Test</h1>
+      <p class="subtitle">Du gegen den Computer. Er verliert nicht gern.</p>
+    </header>
 
-  <main>
-    <section class="rules">
-      <h2>Spielregeln</h2>
-      <ol>
-        <li>Du spielst <strong>X</strong> und beginnst, der Computer spielt <strong>O</strong>.</li>
-        <li>Das Spielfeld ist nummeriert: freie Felder zeigen ihre Nummer <code>0</code>–<code>8</code>.</li>
-        <li>Klicke ins Terminal, tippe die Nummer eines freien Feldes und drücke <kbd>Enter</kbd>.</li>
-        <li>Wer zuerst drei in einer Reihe hat, gewinnt. Ungültige Eingaben werden abgelehnt.</li>
-        <li>Nach Spielende: Button <em>Neues Spiel</em> drücken (startet eine neue Partie).</li>
-      </ol>
-      <pre class="board">0 | 1 | 2
---+---+--
-3 | 4 | 5
---+---+--
-6 | 7 | 8</pre>
-      <button id="restart" type="button">Neues Spiel</button>
-    </section>
+    <main>
+      <aside class="notes">
+        <h2>So geht's</h2>
+        <ol>
+          <li>Du bist <b class="x">X</b> und fängst an, der Computer ist <b class="o">O</b>.</li>
+          <li>Freie Felder zeigen ihre Nummer – tipp sie ins Terminal und drück <kbd>Enter</kbd>.</li>
+          <li>Drei in einer Reihe gewinnt.</li>
+          <li>Quatsch eingeben? Wird abgelehnt, du darfst nochmal.</li>
+        </ol>
 
-    <section class="terminal">
-      <iframe id="console" title="TicTacTest Web-Konsole"></iframe>
-    </section>
-  </main>
+        <div class="board" aria-label="Nummerierung der Felder">
+          <span>0</span><span>1</span><span>2</span>
+          <span>3</span><span>4</span><span>5</span>
+          <span>6</span><span>7</span><span>8</span>
+        </div>
+        <p class="hint">↑ so sind die Felder nummeriert</p>
 
-  <footer>
-    <span>Backend: <strong id="backend-version">…</strong></span>
-    <span>Frontend: <strong id="frontend-version">…</strong></span>
-  </footer>
+        <button id="restart" type="button">Neue Runde</button>
+      </aside>
+
+      <section class="printout">
+        <span class="tape tape-left" aria-hidden="true"></span>
+        <span class="tape tape-right" aria-hidden="true"></span>
+        <iframe id="console" title="TicTacTest Web-Konsole"></iframe>
+      </section>
+    </main>
+
+    <footer>
+      <span>Backend <b id="backend-version">…</b></span>
+      <span>Frontend <b id="frontend-version">…</b></span>
+    </footer>
+  </div>
 </body>
 </html>
