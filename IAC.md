@@ -6,10 +6,10 @@ Diese Dokumentation beschreibt die Umsetzung und theoretischen Grundlagen des Au
 
 ## 1. Zugang zum AWS Learner Lab
 
-Für das Modul **324 HS26 IAC** wird das **AWS Academy Learner Lab** verwendet.
+Für das Modul **324 HS26 IAC** wird das **AWS Academy Learner Lab** verwendet (Kurs-URL: https://awsacademy.instructure.com/courses/177097).
 
 ### Ablauf für den Zugriff & die Authentifizierung
-1. Anmeldung in AWS Academy und Öffnen des Kurses **324 HS26 IAC**.
+1. Anmeldung in AWS Academy und Öffnen des Kurses unter [https://awsacademy.instructure.com/courses/177097](https://awsacademy.instructure.com/courses/177097).
 2. Starten des **Learner Lab** über *Modules* → *Learner Lab* → Button **Start Lab** (warten, bis der Status-Indikator grün wird).
 3. Abrufen der temporären Zugangsdaten über **AWS Details** → **AWS CLI: Show** (`aws_access_key_id`, `aws_secret_access_key`, `aws_session_token`).
 4. Hinterlegen der Zugangsdaten lokal in `~/.aws/credentials` oder über Umgebungsvariablen (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`).
