@@ -155,6 +155,7 @@ curl $VERSION_URL                                   # -> 1.2.0
 
 # Frontend: Archiv entpacken, Bucket synchronisieren, config.js NICHT anfassen
 mkdir site && unzip tictactest-frontend-$V.zip -d site && rm site/config.js
+find site -type f -exec touch {} +            # sonst ueberspringt sync gleich grosse, "aeltere" Dateien
 aws s3 sync site/ s3://$FRONTEND_BUCKET/ --delete --exclude config.js --cache-control no-cache
 curl $FRONTEND_URL/version.txt                      # -> 1.2.0
 ```
@@ -230,7 +231,7 @@ Die Instanz selbst braucht **keine** Secrets: sie nutzt das Instance Profile (te
 - **Nachdeployen**: Secrets aktualisieren → *Actions → Deploy → Run workflow* mit dem Tag (Backend und/oder Frontend
   anhaken, entsprechend der Summary des fehlgeschlagenen Laufs) – oder den fehlgeschlagenen Lauf *Re-run failed jobs*
   (Re-runs lesen die Secrets neu).
-- Getestet: Release mit Credentials einer beendeten Session → Preflight rot, danach Secrets erneuert und per Deploy-Workflow nachdeployt.
+- Getestet (mit einem falsch eingetragenen Secret statt abgelaufener Credentials, gleicher Effekt): Release `v1.2.0` wurde erstellt, *Preflight* schlug mit `SignatureDoesNotMatch` fehl, Backend- und Frontend-Job wurden übersprungen. Nach Korrektur des Secrets: *Re-run failed jobs* → Frontend deployt. Logs kontrolliert: keine Credentials sichtbar (maskiert).
 
 ### Wer sieht/benutzt die Secrets?
 
@@ -312,7 +313,7 @@ git tag v1.3.0 && git push origin v1.3.0
 
 ### Teil 4 – Frontend
 
-- `aws s3 sync site/ s3://<bucket>/ --delete --exclude config.js`: ersetzt alle Dateien, **entfernt nicht mehr vorhandene**, lässt `config.js` in Ruhe (`--exclude` gilt auch für `--delete`). Zusätzlich wird `config.js` aus dem entpackten Archiv gelöscht.
+- Vorher `touch` auf alle entpackten Dateien (siehe Rollback-Test), dann `aws s3 sync site/ s3://<bucket>/ --delete --exclude config.js`: ersetzt alle Dateien, **entfernt nicht mehr vorhandene**, lässt `config.js` in Ruhe (`--exclude` gilt auch für `--delete`). Zusätzlich wird `config.js` aus dem entpackten Archiv gelöscht.
 - Prüfung: `<frontend>/version.txt` muss die neue Version liefern; zusätzlich muss `config.js` noch im Bucket existieren.
 - **Wenn `config.js` gelöscht würde**: Das Frontend kennt die Adresse der Web-Konsole nicht mehr → leeres Terminal mit Fehlermeldung, Backend-Version „unbekannt“. Würde stattdessen die lokale `config.js` hochgeladen, zeigt die Seite auf `localhost` → bei jedem Besucher kaputt. Reparatur: `tofu apply` (schreibt `config.js` neu). Schutz: `--exclude`, `rm site/config.js` und die Prüfung im Workflow.
 
@@ -323,8 +324,8 @@ Da nur Release-Assets verwendet werden, ist jede veröffentlichte Version jederz
 
 | Test | Ergebnis |
 |---|---|
-| **Rollback** v1.3.x → v1.2.0 | Deploy-Workflow mit `v1.2.0` → Backend und Frontend zeigen `1.2.0` |
-| **Kaputter Release** (Jar startet nicht) | Smoke-Test auf der Instanz schlägt fehl → `tictactest-deploy` bricht ab, **alte Version läuft weiter**, SSM-Status `Failed`, Workflow rot. Ausfallzeit: 0. Behebung: Fix-Release oder Deploy einer funktionierenden Version (~1–2 min). |
+| **Rollback** v1.4.0 → v1.2.0 | 1. Versuch ([Deploy #1](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45576080093)): Backend → `1.2.0` ✔, Frontend-Job **rot**: *„Frontend liefert nicht Version 1.2.0 aus“*. Ursache: `aws s3 sync` lädt nur hoch, wenn Grösse oder (neuerer) Zeitstempel abweichen. `unzip` behält die alten Zeitstempel des v1.2.0-Builds, und `version.txt` („1.2.0“ ↔ „1.4.0“) sowie `style.css` (nur Farbwert geändert) sind gleich gross → übersprungen. Die Versionsprüfung hat den Fehler erkannt. Fix: `find site -type f -exec touch {} +` vor dem Sync. 2. Versuch ([Deploy #2](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45577625871)): Backend **und** Frontend `1.2.0`, alte Akzentfarbe wieder aktiv ✔ |
+| **Kaputter Release** (Jar startet nicht) | Real beobachtet beim ersten manuellen Deploy (Abschnitt 3): der Smoke-Test schlug fehl → `tictactest-deploy` brach ab, SSM-Status `Failed`, **die bisherige Version lief weiter** (Ausfallzeit 0). In der Pipeline führt `Failed` zu einem roten Backend-Job. Behebung: Fix-Release oder Deploy-Workflow mit einer funktionierenden Version (~1–2 min). |
 | **Nach `destroy` + `apply`** | GitHub Variables aus `tofu output -raw github_variables` aktualisieren, Deploy-Workflow mit aktuellem Tag → Backend + Frontend wieder da (Jar wird erneut aus dem Release in den neuen Bucket kopiert). |
 
 ---
@@ -333,16 +334,17 @@ Da nur Release-Assets verwendet werden, ist jede veröffentlichte Version jederz
 
 Workflow-Läufe: <https://github.com/MrCodeBS/450-tictactest-mvk/actions>
 
-| # | Fall | Release / Commit | Backend-Job | Frontend-Job | Ergebnis |
+| # | Fall | Release / Commit | Backend-Job | Frontend-Job | Ergebnis (`/version.txt`) |
 |---|---|---|---|---|---|
-| 1 | Erster Release der Web-App (Baseline) | `v1.2.0` | deployt | deployt | Backend 1.2.0, Frontend 1.2.0 |
-| 2 | nur Frontend (Farbe) | `v1.3.0` | übersprungen | deployt | Backend 1.2.0, Frontend 1.3.0 |
-| 3 | nur Backend (PerfectPlayer in `main()`) | `v1.4.0` | deployt | übersprungen | Backend 1.4.0, Frontend 1.3.0 |
-| 4 | beides | `v1.5.0` | deployt | deployt | Backend 1.5.0, Frontend 1.5.0 |
-| 5 | Push auf `main` ohne Tag | – | – | – | nur CI läuft, kein Release-/Deploy-Workflow |
-| 6 | Rollback (manuell) | Deploy `v1.2.0` | deployt | deployt | Backend 1.2.0, Frontend 1.2.0 |
+| 0 | Baseline (manuell, Auftrag 2) | `v1.1.0` | manuell per SSM | manuell per `s3 sync` | Backend 1.1.0, Frontend 1.1.0 |
+| 1 | **nur Frontend** (neues Frontend) | [`v1.2.0`](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45572004562) | übersprungen | deployt | Backend **1.1.0** (unverändert), Frontend 1.2.0 |
+| 2 | **nur Backend** (PerfectPlayer in `main()`) | [`v1.3.0`](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45573419640) | deployt | übersprungen | Backend 1.3.0, Frontend **1.2.0** (unverändert) |
+| 3 | **beides** (Akzentfarbe + Prompt-Tippfehler) | [`v1.4.0`](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45574261317) | deployt | deployt | Backend 1.4.0, Frontend 1.4.0 |
+| 4 | **Push auf `main` ohne Tag** | z. B. Commit `69c042a` | – | – | nur [CI](https://github.com/MrCodeBS/450-tictactest-mvk/actions/workflows/ci.yml?query=branch%3Amain) läuft, kein Release-/Deploy-Workflow, Versionen unverändert |
+| 5 | **Rollback** (manuell, `workflow_dispatch`) | [Deploy `v1.2.0`](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45577625871) | deployt | deployt | Backend 1.2.0, Frontend 1.2.0 |
+| – | Falsches Secret (Signatur-Fehler) | [`v1.2.0`, 1. Versuch](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45572004562) | übersprungen | übersprungen | Preflight rot, nichts halb deployt; nach Korrektur des Secrets *Re-run failed jobs* → Frontend deployt |
 
-Links zu den einzelnen Läufen: siehe [Anhang](#anhang-workflow-läufe).
+Hinweis: Die Tags `v1.2.0` und `v1.3.0` wurden nachträglich auf umgeschriebene Commits verschoben (Commit-Messages bereinigt). Dadurch liefen beide Release-Workflows ein zweites Mal ([#4](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45573914401), [#5](https://github.com/MrCodeBS/450-tictactest-mvk/actions/runs/45573914646)) und deployten dieselben Teile erneut – idempotent, Ergebnis unverändert.
 
 ---
 
