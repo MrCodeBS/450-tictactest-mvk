@@ -3,6 +3,22 @@
 Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/) und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.4.0] - 2026-11-25
+
+### Changed
+- **Backend:** Tippfehler im Eingabe-Prompt behoben (`where to put the next …`).
+- **Frontend:** Neue Akzentfarbe (violett).
+
+## [1.3.0] - 2026-11-25
+
+### Changed
+- **Backend:** `main()` spielt fest gegen den `PerfectPlayer` (Minimax) statt `GreedyPlayer`.
+
+## [1.2.0] - 2026-11-25
+
+### Added
+- **Web-App (M324):** Frontend (`frontend/`), ttyd-Web-Konsole auf EC2, OpenTofu-Infrastruktur, Release mit Frontend-Zip, automatisches Deployment nur der geänderten Teile (`deploy.yml`). Siehe `docs/deployment.md`.
+
 ## [1.1.0] - 2026-11-18
 
 ### Added

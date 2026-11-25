@@ -29,7 +29,7 @@ public class HumanPlayer implements TicTacToePlayer {
 	@Override
 	public int play(Stone[] board, Stone colorToPlay) {
 		while (true) {
-			System.out.println(TicTacToeMain.toString(board) + "where to to put the next " + colorToPlay + "? (0-8): ");
+			System.out.println(TicTacToeMain.toString(board) + "where to put the next " + colorToPlay + "? (0-8): ");
 			if (!scanner.hasNextLine()) {
 				throw new IllegalStateException("No input available for HumanPlayer");
 			}
