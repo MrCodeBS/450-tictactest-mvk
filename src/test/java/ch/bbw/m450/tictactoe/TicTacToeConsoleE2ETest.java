@@ -78,12 +78,14 @@ class TicTacToeConsoleE2ETest {
     }
 
     @Test
-    @StdIo({"0", "3", "6"})
+    @StdIo({"0", "1", "2", "3", "4", "5", "6", "7", "8"})
     @DisplayName("E2E: Full application entry point TicTacToeMain.main runs and terminates without DoS")
     void e2e_mainMethodExecutesCleanly(StdIn in, StdOut out) {
         TicTacToeMain.main(new String[0]);
 
+        // main() spielt gegen den PerfectPlayer: das Spiel endet, und der Mensch (CROSS) kann nicht gewinnen
         assertThat(out.capturedLines())
-            .anyMatch(line -> line.contains("...and the winner is: CROSS"));
+            .anyMatch(line -> line.contains("winner is: CIRCLE") || line.contains("draw"))
+            .noneMatch(line -> line.contains("winner is: CROSS"));
     }
 }
